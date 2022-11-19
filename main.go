@@ -99,9 +99,6 @@ func calculateMerkleNodes(block *BlockBinary) ([][][32]byte, error) {
 		nodes = append(nodes, targetNodes)
 	}
 
-	fmt.Println(numberofLevels)
-	// fmt.Println(nodes)
-
 	// if there's only one then that's the only node and it's also the root
 	if len(block.Txids) == 1 {
 		return nodes, nil
@@ -112,15 +109,13 @@ func calculateMerkleNodes(block *BlockBinary) ([][][32]byte, error) {
 			break
 		}
 		if level == len(nodes)-1 {
-			fmt.Println("adding level")
 			targetNodes := make([][32]byte, 0)
 			nodes = append(nodes, targetNodes)
 		}
 		targetLevel := level + 1
 		var visualization string
 		for idx, node := range nodesAtThisLevel {
-			visualization += "-"
-			if (idx % 2) != 0 {
+			if idx&1 > 0 {
 				digest := append(nodesAtThisLevel[idx-1][:], node[:]...)
 				nodes[targetLevel] = append(nodes[targetLevel], H(digest))
 				continue
@@ -134,6 +129,35 @@ func calculateMerkleNodes(block *BlockBinary) ([][][32]byte, error) {
 		fmt.Println(visualization)
 	}
 	return nodes, nil
+}
+
+type MerklePathBinary struct {
+	Nodes [][32]byte `json:"nodes"`
+	Index uint64     `json:"index"`
+}
+
+func createMerklePathFromNodesAndIndex(nodes [][][32]byte, index uint64) (*MerklePathBinary, error) {
+	// the index bits pick the nodes needed to calculate the merkle root
+	var path MerklePathBinary
+	path.Index = index
+	levels := uint64(len(nodes))
+	multiplier := uint64(1)
+	offset := uint64(0)
+	fmt.Println(levels, index)
+	mask := uint64(1) << levels
+	for level := levels; level >= uint64(0); level-- {
+		if index&mask > 0 {
+			fmt.Println("right")
+			// grab opposite as a node you need.
+			offset += multiplier * 1
+		} else {
+			fmt.Println("left")
+		}
+		path.Nodes = append(path.Nodes, nodes[level][subIdx])
+		multiplier <<= 1
+		mask = mask >> 1
+	}
+	return &path, nil
 }
 
 func main() {
@@ -151,4 +175,10 @@ func main() {
 
 	cm := reverse(nodes[len(nodes)-1][0])
 	fmt.Println("Calculated Merkle Root: ", hex.EncodeToString(cm[:]))
+
+	// create the merkle path
+	_, err = createMerklePathFromNodesAndIndex(nodes, 11)
+	if err != nil {
+		fmt.Println(err)
+	}
 }
