@@ -18,7 +18,7 @@ type BlockJson struct {
 type BlockBinary struct {
 	Txids      [][32]byte
 	Hash       []byte
-	MerkleRoot []byte
+	MerkleRoot [32]byte
 }
 
 func hexToBytes(h string) ([]byte, error) {
@@ -27,6 +27,14 @@ func hexToBytes(h string) ([]byte, error) {
 		return nil, err
 	}
 	return bytes, nil
+}
+
+func reverse(b [32]byte) [32]byte {
+	for i := 0; i < len(b)/2; i++ {
+		j := len(b) - i - 1
+		b[i], b[j] = b[j], b[i]
+	}
+	return b
 }
 
 func blockBinaryFromJson(blockJson *BlockJson) (*BlockBinary, error) {
@@ -38,7 +46,7 @@ func blockBinaryFromJson(blockJson *BlockJson) (*BlockBinary, error) {
 			return nil, err
 		}
 		copy(txid[:], []byte(hash))
-		txids[i] = txid
+		txids[i] = reverse(txid)
 	}
 	hash, err := hexToBytes(blockJson.Hash)
 	if err != nil {
@@ -48,10 +56,12 @@ func blockBinaryFromJson(blockJson *BlockJson) (*BlockBinary, error) {
 	if err != nil {
 		return nil, err
 	}
+	var m [32]byte
+	copy(m[:], []byte(merkleRoot))
 	return &BlockBinary{
 		Txids:      txids,
 		Hash:       hash,
-		MerkleRoot: merkleRoot,
+		MerkleRoot: reverse(m),
 	}, nil
 }
 
@@ -102,10 +112,10 @@ func calculateMerkleNodes(block *BlockBinary) ([][][32]byte, error) {
 			break
 		}
 		if level == len(nodes)-1 {
+			fmt.Println("adding level")
 			targetNodes := make([][32]byte, 0)
 			nodes = append(nodes, targetNodes)
 		}
-		// fmt.Println(level, len(nodesAtThisLevel))
 		targetLevel := level + 1
 		var visualization string
 		for idx, node := range nodesAtThisLevel {
@@ -113,15 +123,11 @@ func calculateMerkleNodes(block *BlockBinary) ([][][32]byte, error) {
 			if (idx % 2) != 0 {
 				digest := append(nodesAtThisLevel[idx-1][:], node[:]...)
 				nodes[targetLevel] = append(nodes[targetLevel], H(digest))
-				b := H(digest)
-				fmt.Println("l", hex.EncodeToString(b[:]))
 				continue
 			}
 			if idx == len(nodesAtThisLevel)-1 {
 				digest := append(node[:], node[:]...)
 				nodes[targetLevel] = append(nodes[targetLevel], H(digest))
-				b := H(digest)
-				fmt.Println("r", hex.EncodeToString(b[:]))
 				continue
 			}
 		}
@@ -140,6 +146,9 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	}
-	fmt.Println(hex.EncodeToString(nodes[len(nodes)-1][0][:]))
-	fmt.Println(hex.EncodeToString(block.MerkleRoot))
+	m := reverse(block.MerkleRoot)
+	fmt.Println("Merkle Root: ", hex.EncodeToString(m[:]))
+
+	cm := reverse(nodes[len(nodes)-1][0])
+	fmt.Println("Calculated Merkle Root: ", hex.EncodeToString(cm[:]))
 }
