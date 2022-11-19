@@ -15,10 +15,18 @@ type BlockJson struct {
 	MerkleRoot string   `json:"merkleroot"`
 }
 
+type MerklePathBinary struct {
+	Nodes [][32]byte `json:"nodes"`
+	Index uint64     `json:"index"`
+}
+
+type PathMap map[[32]byte]*MerklePathBinary
+
 type BlockBinary struct {
-	Txids      [][32]byte
-	Hash       []byte
-	MerkleRoot [32]byte
+	Txids       [][32]byte
+	Hash        []byte
+	MerkleRoot  [32]byte
+	MerklePaths *PathMap
 }
 
 func hexToBytes(h string) ([]byte, error) {
@@ -133,23 +141,13 @@ func calculateMerkleNodes(block *BlockBinary) ([][][32]byte, error) {
 	return nodes, nil
 }
 
-type MerklePathBinary struct {
-	Nodes [][32]byte `json:"nodes"`
-	Index uint64     `json:"index"`
-}
-
 func createMerklePathFromNodesAndIndex(nodes [][][32]byte, index uint64) (*MerklePathBinary, error) {
-	rev := reverse(nodes[0][index])
-	fmt.Println("txid", hex.EncodeToString(rev[:]))
-	// the index bits pick the nodes needed to calculate the merkle root
 	var path MerklePathBinary
 	path.Index = index
 	levels := uint64(len(nodes)) - 1
 	offset := uint64(0)
-	fmt.Println("levels, index", levels, index)
 	mask := uint64(1) << levels
 	for level := levels; level <= levels; level-- {
-		fmt.Println("level: ", level, ", nodes at level ", len(nodes[level]))
 		subIdx := offset
 		if index&mask > 0 {
 			offset += 1
@@ -157,7 +155,6 @@ func createMerklePathFromNodesAndIndex(nodes [][][32]byte, index uint64) (*Merkl
 			subIdx += 1
 		}
 		if level < levels {
-			fmt.Println("| offset ", offset, ", subIdx ", subIdx)
 			path.Nodes = append([][32]byte{nodes[level][subIdx]}, path.Nodes...)
 		}
 		mask = mask >> 1
@@ -166,7 +163,8 @@ func createMerklePathFromNodesAndIndex(nodes [][][32]byte, index uint64) (*Merkl
 	return &path, nil
 }
 
-func checkMerklePathLeadsToRoot(txid *[32]byte, path *MerklePathBinary, root *[32]byte) bool { // start with txid
+func checkMerklePathLeadsToRoot(txid *[32]byte, path *MerklePathBinary, root *[32]byte) bool {
+	// start with txid
 	workingHash := *txid
 	lsb := path.Index
 	// hash with each path node
@@ -183,6 +181,23 @@ func checkMerklePathLeadsToRoot(txid *[32]byte, path *MerklePathBinary, root *[3
 	}
 	// check result equality with root
 	return workingHash == *root
+}
+
+func calculateBlockWideMerklePaths(block *BlockBinary) error {
+	nodes, err := calculateMerkleNodes(block)
+	if err != nil {
+		return err
+	}
+	pathmap := make(PathMap)
+	for idx, txid := range block.Txids {
+		path, err := createMerklePathFromNodesAndIndex(nodes, uint64(idx))
+		if err != nil {
+			fmt.Println(err)
+		}
+		pathmap[txid] = path
+	}
+	block.MerklePaths = &pathmap
+	return nil
 }
 
 func main() {
@@ -218,4 +233,11 @@ func main() {
 	txid := block.Txids[path.Index]
 	valid := checkMerklePathLeadsToRoot(&txid, path, &root)
 	fmt.Println("Merkle Proof Valid: ", valid)
+
+	fmt.Println("Calculating block wide merkle paths...")
+	err = calculateBlockWideMerklePaths(block)
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println("Done.")
 }
