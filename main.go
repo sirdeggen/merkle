@@ -141,21 +141,21 @@ func createMerklePathFromNodesAndIndex(nodes [][][32]byte, index uint64) (*Merkl
 	var path MerklePathBinary
 	path.Index = index
 	levels := uint64(len(nodes))
-	multiplier := uint64(1)
 	offset := uint64(0)
 	fmt.Println(levels, index)
 	mask := uint64(1) << levels
-	for level := levels; level >= uint64(0); level-- {
+	fmt.Println(levels)
+	for level := levels - 1; level > uint64(0); level-- {
+		subIdx := offset - 1
 		if index&mask > 0 {
-			fmt.Println("right")
-			// grab opposite as a node you need.
-			offset += multiplier * 1
+			offset += 1
 		} else {
-			fmt.Println("left")
+			subIdx += 1
 		}
+		fmt.Println(level, " | offset ", offset)
 		path.Nodes = append(path.Nodes, nodes[level][subIdx])
-		multiplier <<= 1
 		mask = mask >> 1
+		offset = offset << 1
 	}
 	return &path, nil
 }
@@ -165,6 +165,8 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	}
+
+	fmt.Println("There are ", len(block.Txids), " Transactions in this block.")
 
 	nodes, err := calculateMerkleNodes(block)
 	if err != nil {
