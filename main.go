@@ -10,14 +10,20 @@ import (
 )
 
 type BlockJson struct {
-	Txids      []string `json:"tx"`
-	Hash       string   `json:"hash"`
-	MerkleRoot string   `json:"merkleroot"`
+	Txids       []string                  `json:"tx"`
+	Hash        string                    `json:"hash"`
+	MerkleRoot  string                    `json:"merkleroot"`
+	MerklePaths map[string]MerklePathJson `json:"merklepaths"`
 }
 
 type MerklePathBinary struct {
 	Nodes [][32]byte `json:"nodes"`
 	Index uint64     `json:"index"`
+}
+
+type MerklePathJson struct {
+	Nodes []string `json:"nodes"`
+	Index uint64   `json:"index"`
 }
 
 type PathMap map[[32]byte]*MerklePathBinary
@@ -200,6 +206,31 @@ func calculateBlockWideMerklePaths(block *BlockBinary) error {
 	return nil
 }
 
+func jsonBlockFromBinary(block *BlockBinary) (*BlockJson, error) {
+	txids := make([]string, len(block.Txids))
+	for i, txid := range block.Txids {
+		rev := reverse(txid)
+		txids[i] = hex.EncodeToString(rev[:])
+	}
+	var jBlock BlockJson
+	jBlock.MerklePaths = make(map[string]MerklePathJson)
+	for txid, path := range *block.MerklePaths {
+		var mpJ MerklePathJson
+		rev := reverse(txid)
+		for _, node := range path.Nodes {
+			revNode := reverse(node)
+			mpJ.Nodes = append(mpJ.Nodes, hex.EncodeToString(revNode[:]))
+		}
+		mpJ.Index = path.Index
+		jBlock.MerklePaths[hex.EncodeToString(rev[:])] = mpJ
+	}
+	rMerkleRoot := reverse(block.MerkleRoot)
+	jBlock.Txids = txids
+	jBlock.Hash = hex.EncodeToString(block.Hash)
+	jBlock.MerkleRoot = hex.EncodeToString(rMerkleRoot[:])
+	return &jBlock, nil
+}
+
 func main() {
 	block, err := getBlockFromFile("data/block.json")
 	if err != nil {
@@ -240,4 +271,14 @@ func main() {
 		fmt.Println(err)
 	}
 	fmt.Println("Done.")
+	jBlock, err := jsonBlockFromBinary(block)
+	if err != nil {
+		fmt.Println(err)
+	}
+	jsonString, err := json.MarshalIndent(jBlock, "", "  ")
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println(len(*block))
+	fmt.Println(string(jsonString))
 }
