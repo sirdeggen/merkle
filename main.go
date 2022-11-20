@@ -279,6 +279,6 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	}
-	fmt.Println(len(*block))
+	fmt.Println(len(*block.MerklePaths))
 	fmt.Println(string(jsonString))
 }
