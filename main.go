@@ -9,6 +9,19 @@ import (
 	"math"
 )
 
+// MerklePath optimized for memory usage
+type MerklePath struct {
+	Nodes []*Hash `json:"nodes"`
+	Index uint64  `json:"index"`
+}
+
+type Block struct {
+	Root  Hash
+	Hash  Hash
+	Txids map[Hash]MerklePath
+	Nodes [][]Hash
+}
+
 type BlockJson struct {
 	Txids       []string                  `json:"tx"`
 	Hash        string                    `json:"hash"`
@@ -33,22 +46,6 @@ type BlockBinary struct {
 	Hash        []byte
 	MerkleRoot  [32]byte
 	MerklePaths *PathMap
-}
-
-func hexToBytes(h string) ([]byte, error) {
-	bytes, err := hex.DecodeString(h)
-	if err != nil {
-		return nil, err
-	}
-	return bytes, nil
-}
-
-func reverse(b [32]byte) [32]byte {
-	for i := 0; i < len(b)/2; i++ {
-		j := len(b) - i - 1
-		b[i], b[j] = b[j], b[i]
-	}
-	return b
 }
 
 func blockBinaryFromJson(blockJson *BlockJson) (*BlockBinary, error) {
