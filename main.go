@@ -9,18 +9,21 @@ import (
 	"math"
 )
 
-// MerklePath optimized for memory usage
+// MerklePath optimized for responding to requests quickly
 type MerklePath struct {
 	Nodes []*Hash `json:"nodes"`
 	Index uint64  `json:"index"`
 }
 
-type Block struct {
-	Root  Hash
-	Hash  Hash
-	Txids map[Hash]MerklePath
-	Nodes [][]Hash
+// MerkleBlock optimized for storing the necessary data
+type MerkleBlock struct {
+	Hash       Hash
+	Root       Hash
+	MerkleTree []Hash
+	PathMap    map[Hash]MerklePath
 }
+
+// original stuff
 
 type BlockJson struct {
 	Txids       []string                  `json:"tx"`
@@ -30,8 +33,8 @@ type BlockJson struct {
 }
 
 type MerklePathBinary struct {
-	Nodes [][32]byte `json:"nodes"`
-	Index uint64     `json:"index"`
+	Nodes []Hash `json:"nodes"`
+	Index uint64 `json:"index"`
 }
 
 type MerklePathJson struct {
@@ -39,17 +42,17 @@ type MerklePathJson struct {
 	Index uint64   `json:"index"`
 }
 
-type PathMap map[[32]byte]*MerklePathBinary
+type PathMap map[Hash]*MerklePathBinary
 
 type BlockBinary struct {
-	Txids       [][32]byte
+	Txids       []Hash
 	Hash        []byte
-	MerkleRoot  [32]byte
+	MerkleRoot  Hash
 	MerklePaths *PathMap
 }
 
 func blockBinaryFromJson(blockJson *BlockJson) (*BlockBinary, error) {
-	txids := make([][32]byte, len(blockJson.Txids))
+	txids := make([]Hash, len(blockJson.Txids))
 	for i, hexTxid := range blockJson.Txids {
 		var txid [32]byte
 		hash, err := hexToBytes(hexTxid)
@@ -98,15 +101,17 @@ func getBlockFromFile(filename string) (*BlockBinary, error) {
 	return opti, nil
 }
 
-func calculateMerkleNodes(block *BlockBinary) ([][][32]byte, error) {
+func calculateMerkleNodes(block *BlockBinary) ([][]Hash, error) {
 	numberofLevels := int(math.Ceil(math.Log2(float64(len(block.Txids)))))
 	// the nodes are all 32 byte hashes
-	var nodes [][][32]byte
+	var nodes [][]Hash
 
 	// the first layer of nodes are just the transactions hashes themselves
 	nodes = append(nodes, block.Txids)
+
+	// the other nodes will need to be calculated, and put in these levels of slices
 	for i := 0; i < numberofLevels; i++ {
-		targetNodes := make([][32]byte, 0)
+		targetNodes := make([]Hash, 0)
 		nodes = append(nodes, targetNodes)
 	}
 
@@ -120,7 +125,7 @@ func calculateMerkleNodes(block *BlockBinary) ([][][32]byte, error) {
 			break
 		}
 		if level == len(nodes)-1 {
-			targetNodes := make([][32]byte, 0)
+			targetNodes := make([]Hash, 0)
 			nodes = append(nodes, targetNodes)
 		}
 		targetLevel := level + 1
@@ -144,7 +149,7 @@ func calculateMerkleNodes(block *BlockBinary) ([][][32]byte, error) {
 	return nodes, nil
 }
 
-func createMerklePathFromNodesAndIndex(nodes [][][32]byte, index uint64) (*MerklePathBinary, error) {
+func createMerklePathFromNodesAndIndex(nodes [][]Hash, index uint64) (*MerklePathBinary, error) {
 	var path MerklePathBinary
 	path.Index = index
 	levels := uint64(len(nodes)) - 1
@@ -158,7 +163,7 @@ func createMerklePathFromNodesAndIndex(nodes [][][32]byte, index uint64) (*Merkl
 			subIdx += 1
 		}
 		if level < levels {
-			path.Nodes = append([][32]byte{nodes[level][subIdx]}, path.Nodes...)
+			path.Nodes = append([]Hash{nodes[level][subIdx]}, path.Nodes...)
 		}
 		mask = mask >> 1
 		offset = offset << 1
@@ -166,7 +171,7 @@ func createMerklePathFromNodesAndIndex(nodes [][][32]byte, index uint64) (*Merkl
 	return &path, nil
 }
 
-func checkMerklePathLeadsToRoot(txid *[32]byte, path *MerklePathBinary, root *[32]byte) bool {
+func checkMerklePathLeadsToRoot(txid *Hash, path *MerklePathBinary, root *Hash) bool {
 	// start with txid
 	workingHash := *txid
 	lsb := path.Index
