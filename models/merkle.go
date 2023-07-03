@@ -13,7 +13,7 @@ type MerkleProof struct {
 
 // MerklePath optimized for responding to requests quickly
 type MerklePath struct {
-	Nodes []*Hash `json:"nodes"`
+	Path  []*Hash `json:"path"`
 	Index uint64  `json:"index"`
 }
 
@@ -26,12 +26,12 @@ type MerkleBlock struct {
 }
 
 type MerklePathBinary struct {
-	Nodes []Hash `json:"nodes"`
+	Path  []Hash `json:"path"`
 	Index uint64 `json:"index"`
 }
 
 type MerklePathJson struct {
-	Nodes []string `json:"nodes"`
+	Path  []string `json:"path"`
 	Index uint64   `json:"index"`
 }
 

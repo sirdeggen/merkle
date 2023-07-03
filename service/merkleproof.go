@@ -81,58 +81,58 @@ func GetBlockFromFile(filename string) (*models.BlockBinary, error) {
 	return opti, nil
 }
 
-func CalculateMerkleNodes(block *models.BlockBinary) ([][]models.Hash, error) {
+func CalculateMerkleBranches(block *models.BlockBinary) ([][]models.Hash, error) {
 	numberofLevels := int(math.Ceil(math.Log2(float64(len(block.Txids)))))
-	// the nodes are all 32 byte hashes
-	var nodes [][]models.Hash
+	// the branches are all 32 byte hashes
+	var branches [][]models.Hash
 
-	// the first layer of nodes are just the transactions hashes themselves
-	nodes = append(nodes, block.Txids)
+	// the first layer of branches are just the transactions hashes themselves
+	branches = append(branches, block.Txids)
 
-	// the other nodes will need to be calculated, and put in these levels of slices
+	// the other branches will need to be calculated, and put in these levels of slices
 	for i := 0; i < numberofLevels; i++ {
-		targetNodes := make([]models.Hash, 0)
-		nodes = append(nodes, targetNodes)
+		targetBranches := make([]models.Hash, 0)
+		branches = append(branches, targetBranches)
 	}
 
-	// if there's only one then that's the only node and it's also the root
+	// if there's only one then that's the only branch and it's also the root
 	if len(block.Txids) == 1 {
-		return nodes, nil
+		return branches, nil
 	}
 
-	for level, nodesAtThisLevel := range nodes {
-		if len(nodesAtThisLevel) == 1 {
+	for level, branchesAtThisLevel := range branches {
+		if len(branchesAtThisLevel) == 1 {
 			break
 		}
-		if level == len(nodes)-1 {
-			targetNodes := make([]models.Hash, 0)
-			nodes = append(nodes, targetNodes)
+		if level == len(branches)-1 {
+			targetBranches := make([]models.Hash, 0)
+			branches = append(branches, targetBranches)
 		}
 		targetLevel := level + 1
-		for idx, node := range nodesAtThisLevel {
+		for idx, branch := range branchesAtThisLevel {
 			if idx&1 > 0 {
-				digest := append(nodesAtThisLevel[idx-1][:], node[:]...)
-				nodes[targetLevel] = append(nodes[targetLevel], H(digest))
+				digest := append(branchesAtThisLevel[idx-1][:], branch[:]...)
+				branches[targetLevel] = append(branches[targetLevel], H(digest))
 				continue
 			}
-			if idx == len(nodesAtThisLevel)-1 {
-				digest := append(node[:], node[:]...)
-				nodes[targetLevel] = append(nodes[targetLevel], H(digest))
+			if idx == len(branchesAtThisLevel)-1 {
+				digest := append(branch[:], branch[:]...)
+				branches[targetLevel] = append(branches[targetLevel], H(digest))
 				continue
 			}
 		}
-		numOfNodesAtTargetLevel := len(nodes[targetLevel])
-		if numOfNodesAtTargetLevel > 1 && numOfNodesAtTargetLevel&1 > 0 {
-			nodes[targetLevel] = append(nodes[targetLevel], nodes[targetLevel][len(nodes[targetLevel])-1])
+		numOfBranchesAtTargetLevel := len(branches[targetLevel])
+		if numOfBranchesAtTargetLevel > 1 && numOfBranchesAtTargetLevel&1 > 0 {
+			branches[targetLevel] = append(branches[targetLevel], branches[targetLevel][len(branches[targetLevel])-1])
 		}
 	}
-	return nodes, nil
+	return branches, nil
 }
 
-func CreateMerklePathFromNodesAndIndex(nodes [][]models.Hash, index uint64) (*models.MerklePathBinary, error) {
+func CreateMerklePathFromBranchesAndIndex(leaves [][]models.Hash, index uint64) (*models.MerklePathBinary, error) {
 	var path models.MerklePathBinary
 	path.Index = index
-	levels := uint64(len(nodes)) - 1
+	levels := uint64(len(leaves)) - 1
 	offset := uint64(0)
 	mask := uint64(1) << levels
 	for level := levels; level <= levels; level-- {
@@ -143,7 +143,7 @@ func CreateMerklePathFromNodesAndIndex(nodes [][]models.Hash, index uint64) (*mo
 			subIdx += 1
 		}
 		if level < levels {
-			path.Nodes = append([]models.Hash{nodes[level][subIdx]}, path.Nodes...)
+			path.Path = append([]models.Hash{leaves[level][subIdx]}, path.Path...)
 		}
 		mask = mask >> 1
 		offset = offset << 1
@@ -155,14 +155,14 @@ func CheckMerklePathLeadsToRoot(txid *models.Hash, path *models.MerklePathBinary
 	// start with txid
 	workingHash := *txid
 	lsb := path.Index
-	// hash with each path node
-	for _, node := range path.Nodes {
+	// hash with each path branch
+	for _, leaf := range path.Path {
 		var digest []byte
 		// if the least significant bit is 1 then the working hash is on the right
 		if lsb&1 > 0 {
-			digest = append(node[:], workingHash[:]...)
+			digest = append(leaf[:], workingHash[:]...)
 		} else {
-			digest = append(workingHash[:], node[:]...)
+			digest = append(workingHash[:], leaf[:]...)
 		}
 		workingHash = H(digest)
 		lsb = lsb >> 1
@@ -172,13 +172,13 @@ func CheckMerklePathLeadsToRoot(txid *models.Hash, path *models.MerklePathBinary
 }
 
 func CalculateBlockWideMerklePaths(block *models.BlockBinary) error {
-	nodes, err := CalculateMerkleNodes(block)
+	branches, err := CalculateMerkleBranches(block)
 	if err != nil {
 		return err
 	}
 	pathmap := make(models.PathMap)
 	for idx, txid := range block.Txids {
-		path, err := CreateMerklePathFromNodesAndIndex(nodes, uint64(idx))
+		path, err := CreateMerklePathFromBranchesAndIndex(branches, uint64(idx))
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -199,9 +199,9 @@ func JsonBlockFromBinary(block *models.BlockBinary) (*models.BlockJson, error) {
 	for txid, path := range *block.MerklePaths {
 		var mpJ models.MerklePathJson
 		rev := helpers.Reverse(txid)
-		for _, node := range path.Nodes {
-			revNode := helpers.Reverse(node)
-			mpJ.Nodes = append(mpJ.Nodes, hex.EncodeToString(revNode[:]))
+		for _, leaf := range path.Path {
+			revLeaf := helpers.Reverse(leaf)
+			mpJ.Path = append(mpJ.Path, hex.EncodeToString(revLeaf[:]))
 		}
 		mpJ.Index = path.Index
 		jBlock.MerklePaths[hex.EncodeToString(rev[:])] = mpJ
