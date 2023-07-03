@@ -7,75 +7,37 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math"
+
+	"github.com/sirdeggen/merkle/helpers"
+	"github.com/sirdeggen/merkle/models"
+	"github.com/sirdeggen/merkle/service"
 )
 
-// MerklePath optimized for responding to requests quickly
-type MerklePath struct {
-	Nodes []*Hash `json:"nodes"`
-	Index uint64  `json:"index"`
-}
-
-// MerkleBlock optimized for storing the necessary data
-type MerkleBlock struct {
-	Hash       Hash
-	Root       Hash
-	MerkleTree []Hash
-	PathMap    map[Hash]MerklePath
-}
-
-// original stuff
-
-type BlockJson struct {
-	Txids       []string                  `json:"tx"`
-	Hash        string                    `json:"hash"`
-	MerkleRoot  string                    `json:"merkleroot"`
-	MerklePaths map[string]MerklePathJson `json:"merklepaths"`
-}
-
-type MerklePathBinary struct {
-	Nodes []Hash `json:"nodes"`
-	Index uint64 `json:"index"`
-}
-
-type MerklePathJson struct {
-	Nodes []string `json:"nodes"`
-	Index uint64   `json:"index"`
-}
-
-type PathMap map[Hash]*MerklePathBinary
-
-type BlockBinary struct {
-	Txids       []Hash
-	Hash        []byte
-	MerkleRoot  Hash
-	MerklePaths *PathMap
-}
-
-func blockBinaryFromJson(blockJson *BlockJson) (*BlockBinary, error) {
-	txids := make([]Hash, len(blockJson.Txids))
+func blockBinaryFromJson(blockJson *models.BlockJson) (*models.BlockBinary, error) {
+	txids := make([]models.Hash, len(blockJson.Txids))
 	for i, hexTxid := range blockJson.Txids {
 		var txid [32]byte
-		hash, err := hexToBytes(hexTxid)
+		hash, err := helpers.HexToBytes(hexTxid)
 		if err != nil {
 			return nil, err
 		}
 		copy(txid[:], []byte(hash))
-		txids[i] = reverse(txid)
+		txids[i] = helpers.Reverse(txid)
 	}
-	hash, err := hexToBytes(blockJson.Hash)
+	hash, err := helpers.HexToBytes(blockJson.Hash)
 	if err != nil {
 		return nil, err
 	}
-	merkleRoot, err := hexToBytes(blockJson.MerkleRoot)
+	merkleRoot, err := helpers.HexToBytes(blockJson.MerkleRoot)
 	if err != nil {
 		return nil, err
 	}
 	var m [32]byte
 	copy(m[:], []byte(merkleRoot))
-	return &BlockBinary{
+	return &models.BlockBinary{
 		Txids:      txids,
 		Hash:       hash,
-		MerkleRoot: reverse(m),
+		MerkleRoot: helpers.Reverse(m),
 	}, nil
 }
 
@@ -84,12 +46,12 @@ func H(digest []byte) [32]byte {
 	return sha256.Sum256(one[:])
 }
 
-func getBlockFromFile(filename string) (*BlockBinary, error) {
+func getBlockFromFile(filename string) (*models.BlockBinary, error) {
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
-	var jsonData BlockJson
+	var jsonData models.BlockJson
 	err = json.Unmarshal(data, &jsonData)
 	if err != nil {
 		return nil, err
@@ -101,17 +63,17 @@ func getBlockFromFile(filename string) (*BlockBinary, error) {
 	return opti, nil
 }
 
-func calculateMerkleNodes(block *BlockBinary) ([][]Hash, error) {
+func calculateMerkleNodes(block *models.BlockBinary) ([][]models.Hash, error) {
 	numberofLevels := int(math.Ceil(math.Log2(float64(len(block.Txids)))))
 	// the nodes are all 32 byte hashes
-	var nodes [][]Hash
+	var nodes [][]models.Hash
 
 	// the first layer of nodes are just the transactions hashes themselves
 	nodes = append(nodes, block.Txids)
 
 	// the other nodes will need to be calculated, and put in these levels of slices
 	for i := 0; i < numberofLevels; i++ {
-		targetNodes := make([]Hash, 0)
+		targetNodes := make([]models.Hash, 0)
 		nodes = append(nodes, targetNodes)
 	}
 
@@ -125,7 +87,7 @@ func calculateMerkleNodes(block *BlockBinary) ([][]Hash, error) {
 			break
 		}
 		if level == len(nodes)-1 {
-			targetNodes := make([]Hash, 0)
+			targetNodes := make([]models.Hash, 0)
 			nodes = append(nodes, targetNodes)
 		}
 		targetLevel := level + 1
@@ -149,8 +111,8 @@ func calculateMerkleNodes(block *BlockBinary) ([][]Hash, error) {
 	return nodes, nil
 }
 
-func createMerklePathFromNodesAndIndex(nodes [][]Hash, index uint64) (*MerklePathBinary, error) {
-	var path MerklePathBinary
+func createMerklePathFromNodesAndIndex(nodes [][]models.Hash, index uint64) (*models.MerklePathBinary, error) {
+	var path models.MerklePathBinary
 	path.Index = index
 	levels := uint64(len(nodes)) - 1
 	offset := uint64(0)
@@ -163,7 +125,7 @@ func createMerklePathFromNodesAndIndex(nodes [][]Hash, index uint64) (*MerklePat
 			subIdx += 1
 		}
 		if level < levels {
-			path.Nodes = append([]Hash{nodes[level][subIdx]}, path.Nodes...)
+			path.Nodes = append([]models.Hash{nodes[level][subIdx]}, path.Nodes...)
 		}
 		mask = mask >> 1
 		offset = offset << 1
@@ -171,7 +133,7 @@ func createMerklePathFromNodesAndIndex(nodes [][]Hash, index uint64) (*MerklePat
 	return &path, nil
 }
 
-func checkMerklePathLeadsToRoot(txid *Hash, path *MerklePathBinary, root *Hash) bool {
+func checkMerklePathLeadsToRoot(txid *models.Hash, path *models.MerklePathBinary, root *models.Hash) bool {
 	// start with txid
 	workingHash := *txid
 	lsb := path.Index
@@ -191,12 +153,12 @@ func checkMerklePathLeadsToRoot(txid *Hash, path *MerklePathBinary, root *Hash) 
 	return workingHash == *root
 }
 
-func calculateBlockWideMerklePaths(block *BlockBinary) error {
+func calculateBlockWideMerklePaths(block *models.BlockBinary) error {
 	nodes, err := calculateMerkleNodes(block)
 	if err != nil {
 		return err
 	}
-	pathmap := make(PathMap)
+	pathmap := make(models.PathMap)
 	for idx, txid := range block.Txids {
 		path, err := createMerklePathFromNodesAndIndex(nodes, uint64(idx))
 		if err != nil {
@@ -208,25 +170,25 @@ func calculateBlockWideMerklePaths(block *BlockBinary) error {
 	return nil
 }
 
-func jsonBlockFromBinary(block *BlockBinary) (*BlockJson, error) {
+func jsonBlockFromBinary(block *models.BlockBinary) (*models.BlockJson, error) {
 	txids := make([]string, len(block.Txids))
 	for i, txid := range block.Txids {
-		rev := reverse(txid)
+		rev := helpers.Reverse(txid)
 		txids[i] = hex.EncodeToString(rev[:])
 	}
-	var jBlock BlockJson
-	jBlock.MerklePaths = make(map[string]MerklePathJson)
+	var jBlock models.BlockJson
+	jBlock.MerklePaths = make(map[string]models.MerklePathJson)
 	for txid, path := range *block.MerklePaths {
-		var mpJ MerklePathJson
-		rev := reverse(txid)
+		var mpJ models.MerklePathJson
+		rev := helpers.Reverse(txid)
 		for _, node := range path.Nodes {
-			revNode := reverse(node)
+			revNode := helpers.Reverse(node)
 			mpJ.Nodes = append(mpJ.Nodes, hex.EncodeToString(revNode[:]))
 		}
 		mpJ.Index = path.Index
 		jBlock.MerklePaths[hex.EncodeToString(rev[:])] = mpJ
 	}
-	rMerkleRoot := reverse(block.MerkleRoot)
+	rMerkleRoot := helpers.Reverse(block.MerkleRoot)
 	jBlock.Txids = txids
 	jBlock.Hash = hex.EncodeToString(block.Hash)
 	jBlock.MerkleRoot = hex.EncodeToString(rMerkleRoot[:])
@@ -234,6 +196,9 @@ func jsonBlockFromBinary(block *BlockBinary) (*BlockJson, error) {
 }
 
 func main() {
+	serv := service.NewMerkleProofService()
+	fmt.Println(serv)
+
 	block, err := getBlockFromFile("data/block.json")
 	if err != nil {
 		fmt.Println(err)
@@ -245,10 +210,10 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	}
-	m := reverse(block.MerkleRoot)
+	m := helpers.Reverse(block.MerkleRoot)
 	fmt.Println("Merkle Root: ", hex.EncodeToString(m[:]))
 
-	cm := reverse(nodes[len(nodes)-1][0])
+	cm := helpers.Reverse(nodes[len(nodes)-1][0])
 	fmt.Println("Calculated Merkle Root: ", hex.EncodeToString(cm[:]))
 
 	// create the merkle path
@@ -258,7 +223,7 @@ func main() {
 	}
 	fmt.Println("Merkle Path: ")
 	for _, node := range path.Nodes {
-		rev := reverse(node)
+		rev := helpers.Reverse(node)
 		fmt.Println(hex.EncodeToString(rev[:]))
 	}
 

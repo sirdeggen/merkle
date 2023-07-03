@@ -1,24 +1,24 @@
-package main
+package service
 
 import (
-	merkle "github.com/sirdeggen/merkle/models"
+	"github.com/sirdeggen/merkle/models"
 )
 
 type merkleProofService struct {
 	config string
 }
 
-func NewMekleProofService() *merkleProofService {
+func NewMerkleProofService() *merkleProofService {
 	return &merkleProofService{
 		config: "no idea waht to put here",
 	}
 }
 
-func (m *merkleProofService) GetMerkleProof(txids string) (*merkle.MerkleProof, error) {
-	var proof merkle.MerkleProof
+func (m *merkleProofService) GetMerkleProof(txids string) (*models.MerkleProof, error) {
+	var proof models.MerkleProof
 	return &proof, nil
 }
 
-func (m *merkleProofService) StoreMerkleProof(txid string, proof *merkle.MerkleProof) error {
+func (m *merkleProofService) StoreMerkleProof(txid string, proof *models.MerkleProof) error {
 	return nil
 }
