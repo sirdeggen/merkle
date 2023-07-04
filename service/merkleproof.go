@@ -121,10 +121,10 @@ func CalculateMerkleBranches(block *models.BlockBinary) ([][]models.Hash, error)
 				continue
 			}
 		}
-		numOfBranchesAtTargetLevel := len(branches[targetLevel])
-		if numOfBranchesAtTargetLevel > 1 && numOfBranchesAtTargetLevel&1 > 0 {
-			branches[targetLevel] = append(branches[targetLevel], branches[targetLevel][len(branches[targetLevel])-1])
-		}
+		// numOfBranchesAtTargetLevel := len(branches[targetLevel])
+		// if numOfBranchesAtTargetLevel > 1 && numOfBranchesAtTargetLevel&1 > 0 {
+		// 	branches[targetLevel] = append(branches[targetLevel], branches[targetLevel][len(branches[targetLevel])-1])
+		// }
 	}
 	return branches, nil
 }
