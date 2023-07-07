@@ -12,15 +12,34 @@ import (
 )
 
 type MerkleTree [][]hash.Hash
-type MerklePath []hash.Hash
+type MerklePath struct {
+	Leaf  hash.Hash
+	Index uint64
+	Path  []hash.Hash
+}
+
 type MerklePathJson struct {
-	Item  string   `json:"item"`
+	Leaf  string   `json:"leaf"`
 	Index string   `json:"index"`
 	Path  []string `json:"path"`
 }
 
+func (mpb *MerklePath) Json() *MerklePathJson {
+	leaf := mpb.Leaf.StringReverse()
+	index := fmt.Sprint(mpb.Index)
+	path := make([]string, len(mpb.Path))
+	for i, hash := range mpb.Path {
+		path[i] = hash.StringReverse()
+	}
+	return &MerklePathJson{
+		Leaf:  leaf,
+		Index: index,
+		Path:  path,
+	}
+}
+
 type MerkleTreeReaderWriter interface {
-	Read(string, uint64) (*MerklePathJson, error)
+	Read(string, uint64) (*MerklePath, error)
 	Write(string, MerkleTree) error
 }
 
@@ -50,15 +69,15 @@ func (mpw *merkleTreeService) Write(branches MerkleTree) error {
 	return err
 }
 
-func (mpw *merkleTreeService) Read(root string, index uint64) (*MerklePathJson, error) {
-	filename := fmt.Sprint(mpw.Directory, '/', root)
+func (mpw *merkleTreeService) Read(root string, index uint64) (*MerklePath, error) {
+	filename := mpw.Directory + "/" + root
 	f, err := os.Open(filename)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
 
-	var path MerklePath
+	var path []hash.Hash
 
 	// Read Unit64 from file
 	UintBytes := make([]byte, 8)
@@ -71,7 +90,7 @@ func (mpw *merkleTreeService) Read(root string, index uint64) (*MerklePathJson, 
 
 	// is index within
 	if index >= numOfTxs {
-		return nil, fmt.Errorf("This block only has %d transactions, you tried to use index: %d which points to nil", numOfTxs, index)
+		return nil, fmt.Errorf("Merkle Tree has %d leaves. Leaves[%d] points to nil", numOfTxs, index)
 	}
 
 	// calulate how many power levels
@@ -97,7 +116,7 @@ func (mpw *merkleTreeService) Read(root string, index uint64) (*MerklePathJson, 
 	cumulativeBranchOffset := uint64(0)
 	powerOffset := uint64(0)
 	skip := uint64(0)
-	var item hash.Hash
+	var leaf hash.Hash
 	for x := 0; x <= power; x++ {
 		mask >>= 1
 		branchOffset := branches[len(branches)-1-x]
@@ -116,13 +135,13 @@ func (mpw *merkleTreeService) Read(root string, index uint64) (*MerklePathJson, 
 			path = append(path, h)
 			if x == power {
 				// we are at the leaf level
-				// read the item
+				// read the leaf
 				d := make([]byte, 32)
 				_, err = f.Read(d)
 				if err != nil {
 					return nil, err
 				}
-				copy(item[:], d)
+				copy(leaf[:], d)
 			}
 		} else {
 			// the tx is in the left branch
@@ -145,7 +164,7 @@ func (mpw *merkleTreeService) Read(root string, index uint64) (*MerklePathJson, 
 			path = append(path, h)
 			if x == power {
 				// we are at the leaf level
-				// read the item which is two back
+				// read the leaf which is two back
 				backTwo := -2 * int64(32)
 				_, err = f.Seek(backTwo, 1)
 				if err != nil {
@@ -156,7 +175,7 @@ func (mpw *merkleTreeService) Read(root string, index uint64) (*MerklePathJson, 
 				if err != nil {
 					return nil, err
 				}
-				copy(item[:], d)
+				copy(leaf[:], d)
 			}
 		}
 
@@ -169,10 +188,9 @@ func (mpw *merkleTreeService) Read(root string, index uint64) (*MerklePathJson, 
 			return nil, err
 		}
 	}
-	var merklePath MerklePathJson
-	for _, h := range path {
-		merklePath.Path = append(merklePath.Path, h.StringReverse())
-	}
-	merklePath.Item = item.StringReverse()
-	return &merklePath, nil
+	var mp MerklePath
+	mp.Path = path
+	mp.Leaf = leaf
+	mp.Index = index
+	return &mp, nil
 }
