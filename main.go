@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 
+	"github.com/sirdeggen/merkle/block"
 	"github.com/sirdeggen/merkle/tree"
 )
 
@@ -26,22 +27,16 @@ func readExisting(root string) {
 }
 
 func createTreeFileFromJsonFile(filename string) {
-	mts := tree.NewMerkleTreeService("data")
-	var branches tree.MerkleTree
-	jsonFile, err := os.Open(filename)
-	if err != nil {
-		fmt.Println(err)
-	}
-	defer jsonFile.Close()
-	byteValue, _ := ioutil.ReadAll(jsonFile)
-	err = json.Unmarshal(byteValue, &branches)
-	if err != nil {
-		fmt.Println(err)
-	}
-	err = mts.Write(branches)
-	if err != nil {
-		fmt.Println(err)
-	}
+	file, _ := os.Open(filename)
+	defer file.Close()
+
+	var jsonData block.BlockJson
+	byteValue, _ := ioutil.ReadAll(file)
+	_ = json.Unmarshal(byteValue, &jsonData)
+
+	blockBinary, _ := block.BlockBinaryFromJson(&jsonData)
+
+	fmt.Println("BlockBinary:", blockBinary)
 }
 
 func main() {
