@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"os"
 
 	"github.com/sirdeggen/merkle/helpers"
@@ -41,9 +42,6 @@ func Read(name string, index uint64) ([]byte, error) {
 		return nil, fmt.Errorf("This block only has %d transactions, you tried to use index: %d which points to nil", numOfTxs, index)
 	}
 
-	// flip each bit of index
-	inverseIndex := ^index
-
 	// calulate how many power levels
 	power := -1
 	mask := uint64(1)
@@ -52,13 +50,52 @@ func Read(name string, index uint64) ([]byte, error) {
 		power++
 	}
 
-	skip := 2
+	powerMask := uint64(mask)
+	for powerMask < (math.MaxUint64 / 2) {
+		powerMask = (powerMask * 2) | powerMask
+	}
+	fmt.Printf("%64b\n", powerMask)
+
+	// number of branches per level
+	branches := make([]uint64, power+1)
+	branches[0] = numOfTxs
+	for x := 1; x <= power; x++ {
+		branches[x] = uint64(math.Ceil(float64(branches[x-1]) / 2))
+	}
+	fmt.Println("branches: ", branches)
+
+	cumulativeBranchOffset := uint64(0)
+	powerOffset := uint64(0)
+	skip := uint64(0)
 	for x := 0; x <= power; x++ {
 		mask >>= 1
+		powerOffset <<= 1
+		branchOffset := branches[len(branches)-1-x]
+		cumulativeBranchOffset += branchOffset
 		fmt.Printf("%64b\n", mask)
-		fmt.Printf("%64b\n", inverseIndex)
-		if inverseIndex&mask > 0 {
+		fmt.Printf("%64b\n", index)
+		fmt.Printf("%64b\n", index&mask)
+		fmt.Println("skip at top: ", skip)
+		if index&mask > 0 {
 			fmt.Println("r")
+			powerOffset++
+			// the tx is in the right branch
+			// therefore we read the left path
+			d := make([]byte, 32)
+			_, err = f.Read(d)
+			var t [32]byte
+			copy(t[:], d)
+			hash := helpers.Reverse(t)
+			fmt.Println("hash: ", hex.EncodeToString(hash[:]))
+			if err != nil {
+				return nil, err
+			}
+			data = append(data, d...)
+			// and add one to the offset
+		} else {
+			fmt.Println("l")
+			// the tx is in the left branch
+			// therefore we read the right path by skipping forward one
 			d := make([]byte, 32)
 			_, err = f.Seek(int64(32), 1)
 			if err != nil {
@@ -73,24 +110,16 @@ func Read(name string, index uint64) ([]byte, error) {
 				return nil, err
 			}
 			data = append(data, d...)
-		} else {
-			fmt.Println("l")
-			skip += 1
-			d := make([]byte, 32)
-			_, err = f.Read(d)
-			var t [32]byte
-			copy(t[:], d)
-			hash := helpers.Reverse(t)
-			fmt.Println("hash: ", hex.EncodeToString(hash[:]))
-			if err != nil {
-				return nil, err
-			}
-			data = append(data, d...)
 		}
+
 		// calculate skip
-		skip = skip * 2
+		skip := powerOffset + cumulativeBranchOffset
+		seekPosition := (32 * skip) + 8
+		fmt.Println("powerOffset: ", powerOffset)
+		fmt.Println("branchOffset: ", branchOffset)
 		fmt.Println("skip: ", skip)
-		_, err = f.Seek(int64(skip), 1)
+		fmt.Println("seekPosition: ", seekPosition)
+		_, err = f.Seek(int64(seekPosition), 0)
 		if err != nil {
 			return nil, err
 		}
