@@ -69,13 +69,11 @@ func Read(name string, index uint64) ([]byte, error) {
 	skip := uint64(0)
 	for x := 0; x <= power; x++ {
 		mask >>= 1
-		powerOffset <<= 1
 		branchOffset := branches[len(branches)-1-x]
 		cumulativeBranchOffset += branchOffset
 		fmt.Printf("%64b\n", mask)
 		fmt.Printf("%64b\n", index)
 		fmt.Printf("%64b\n", index&mask)
-		fmt.Println("skip at top: ", skip)
 		if index&mask > 0 {
 			fmt.Println("r")
 			powerOffset++
@@ -113,12 +111,14 @@ func Read(name string, index uint64) ([]byte, error) {
 		}
 
 		// calculate skip
-		skip := powerOffset + cumulativeBranchOffset
+		powerOffset <<= 1
+		skip = powerOffset + cumulativeBranchOffset
 		seekPosition := (32 * skip) + 8
+		fmt.Println("\n\nNext hash will be read from:")
+		fmt.Println("skip: ", skip)
 		fmt.Println("powerOffset: ", powerOffset)
 		fmt.Println("branchOffset: ", branchOffset)
-		fmt.Println("skip: ", skip)
-		fmt.Println("seekPosition: ", seekPosition)
+		fmt.Println("cumulativeBranchOffset: ", cumulativeBranchOffset)
 		_, err = f.Seek(int64(seekPosition), 0)
 		if err != nil {
 			return nil, err
@@ -149,15 +149,6 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	}
-	// print each line as hex string
-	for x := 1; x <= len(data)/32; x++ {
-		//data[(x-1)*32:x*32]
-		// reverse the 32 bytes
-		var chunk [32]byte
-		copy(chunk[:], data[(x-1)*32:x*32])
-		d := helpers.Reverse(chunk)
-		fmt.Println("Merkle Path: ", hex.EncodeToString(d[:]))
-	}
 
 	block, err = service.GetBlockFromFile("data/midblock.json")
 	if err != nil {
@@ -166,7 +157,6 @@ func main() {
 
 	pathos := make([]models.Hash, 0, 0)
 	for x := 0; x < 5; x++ {
-		fmt.Println("x: ", x, data[x*32:(x+1)*32])
 		hash := [32]byte{}
 		copy(hash[:], data[x*32:(x+1)*32])
 		pathos = append(pathos, hash)
@@ -177,9 +167,24 @@ func main() {
 		Index: 10,
 	}
 
+	wholeTree, _ := service.CalculateMerkleBranches(block)
+
+	// print each line as hex string
+	for x := len(wholeTree) - 1; x >= 0; x-- {
+		fmt.Println("\nLevel: ", x)
+		for y := 0; y < len(wholeTree[x]); y++ {
+			//data[(x-1)*32:x*32]
+			// reverse the 32 bytes
+			var chunk [32]byte
+			copy(chunk[:], wholeTree[x][y][:])
+			d := helpers.Reverse(chunk)
+			fmt.Print(hex.EncodeToString(d[:6]), " ")
+		}
+	}
+
 	txid := block.Txids[10]
 	rev := helpers.Reverse(txid)
-	fmt.Println("Txid: ", hex.EncodeToString(rev[:]))
+	fmt.Println("\nTxid: ", hex.EncodeToString(rev[:]))
 
 	valid := service.CheckMerklePathLeadsToRoot(&txid, path, &branches[len(branches)-1][0])
 	fmt.Println("Merkle Proof Valid: ", valid)
