@@ -141,7 +141,8 @@ func main() {
 	m := helpers.Reverse(block.MerkleRoot)
 	fmt.Println("Merkle Root: ", hex.EncodeToString(m[:]))
 
-	cm := helpers.Reverse(branches[len(branches)-1][0])
+	root := branches[len(branches)-1][0]
+	cm := helpers.Reverse(root)
 	fmt.Println("Calculated Merkle Root: ", hex.EncodeToString(cm[:]))
 
 	// read data/branches.bin
@@ -159,7 +160,10 @@ func main() {
 	for x := 0; x < 5; x++ {
 		hash := [32]byte{}
 		copy(hash[:], data[x*32:(x+1)*32])
-		pathos = append(pathos, hash)
+		revHash := helpers.Reverse(hash)
+		fmt.Println("hash: ", hex.EncodeToString(revHash[:]))
+		// prepend
+		pathos = append([]models.Hash{hash}, pathos...)
 	}
 
 	path := &models.MerklePathBinary{
@@ -186,7 +190,7 @@ func main() {
 	rev := helpers.Reverse(txid)
 	fmt.Println("\nTxid: ", hex.EncodeToString(rev[:]))
 
-	valid := service.CheckMerklePathLeadsToRoot(&txid, path, &branches[len(branches)-1][0])
+	valid := service.CheckMerklePathLeadsToRoot(&txid, path, &root)
 	fmt.Println("Merkle Proof Valid: ", valid)
 
 }

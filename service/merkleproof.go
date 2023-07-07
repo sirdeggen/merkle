@@ -154,17 +154,30 @@ func CreateMerklePathFromBranchesAndIndex(leaves [][]models.Hash, index uint64) 
 func CheckMerklePathLeadsToRoot(txid *models.Hash, path *models.MerklePathBinary, root *models.Hash) bool {
 	// start with txid
 	workingHash := *txid
+	rev := helpers.Reverse(workingHash)
+	wh := hex.EncodeToString(rev[:])
+	fmt.Println("working hash: ", wh)
 	lsb := path.Index
 	// hash with each path branch
 	for _, leaf := range path.Path {
 		var digest []byte
+		var h [32]byte
+		copy(h[:], leaf[:])
+		rev = helpers.Reverse(h)
+		wh = hex.EncodeToString(rev[:])
+		fmt.Println("consuming leaf: ", wh)
 		// if the least significant bit is 1 then the working hash is on the right
 		if lsb&1 > 0 {
+			fmt.Println("r")
 			digest = append(leaf[:], workingHash[:]...)
 		} else {
+			fmt.Println("l")
 			digest = append(workingHash[:], leaf[:]...)
 		}
 		workingHash = H(digest)
+		rev = helpers.Reverse(workingHash)
+		wh = hex.EncodeToString(rev[:])
+		fmt.Println("working hash: ", wh)
 		lsb = lsb >> 1
 	}
 	// check result equality with root
