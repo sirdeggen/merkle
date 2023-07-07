@@ -94,11 +94,15 @@ func Read(name string, index uint64) ([]byte, error) {
 			fmt.Println("l")
 			// the tx is in the left branch
 			// therefore we read the right path by skipping forward one
-			d := make([]byte, 32)
-			_, err = f.Seek(int64(32), 1)
-			if err != nil {
-				return nil, err
+			// unless it's the right most, in which case it's a duplicate of the left
+			rightmost := cumulativeBranchOffset - 1
+			if skip < rightmost {
+				_, err = f.Seek(int64(32), 1)
+				if err != nil {
+					return nil, err
+				}
 			}
+			d := make([]byte, 32)
 			_, err = f.Read(d)
 			var t [32]byte
 			copy(t[:], d)
@@ -145,30 +149,9 @@ func main() {
 	cm := helpers.Reverse(root)
 	fmt.Println("Calculated Merkle Root: ", hex.EncodeToString(cm[:]))
 
-	// read data/branches.bin
-	data, err := Read("data/branches.bin", 10)
-	if err != nil {
-		fmt.Println(err)
-	}
-
 	block, err = service.GetBlockFromFile("data/midblock.json")
 	if err != nil {
 		fmt.Println(err)
-	}
-
-	pathos := make([]models.Hash, 0, 0)
-	for x := 0; x < 5; x++ {
-		hash := [32]byte{}
-		copy(hash[:], data[x*32:(x+1)*32])
-		revHash := helpers.Reverse(hash)
-		fmt.Println("hash: ", hex.EncodeToString(revHash[:]))
-		// prepend
-		pathos = append([]models.Hash{hash}, pathos...)
-	}
-
-	path := &models.MerklePathBinary{
-		Path:  pathos,
-		Index: 10,
 	}
 
 	wholeTree, _ := service.CalculateMerkleBranches(block)
@@ -186,11 +169,34 @@ func main() {
 		}
 	}
 
-	txid := block.Txids[10]
-	rev := helpers.Reverse(txid)
-	fmt.Println("\nTxid: ", hex.EncodeToString(rev[:]))
+	// check all of the merkle paths
+	for x := 0; x < len(block.Txids); x++ {
+		fmt.Println("\n\nIndex: ", x)
+		txid := block.Txids[x]
+		rev := helpers.Reverse(txid)
+		fmt.Println("\nTxid: ", hex.EncodeToString(rev[:]))
 
-	valid := service.CheckMerklePathLeadsToRoot(&txid, path, &root)
-	fmt.Println("Merkle Proof Valid: ", valid)
+		// read data/branches.bin
+		data, err := Read("data/branches.bin", uint64(x))
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		pathos := make([]models.Hash, 0, 0)
+		for x := 0; x < 5; x++ {
+			hash := [32]byte{}
+			copy(hash[:], data[x*32:(x+1)*32])
+			revHash := helpers.Reverse(hash)
+			fmt.Println("hash: ", hex.EncodeToString(revHash[:]))
+			// prepend
+			pathos = append([]models.Hash{hash}, pathos...)
+		}
+		path := &models.MerklePathBinary{
+			Path:  pathos,
+			Index: uint64(x),
+		}
+		valid := service.CheckMerklePathLeadsToRoot(&txid, path, &root)
+		fmt.Println("Merkle Proof Valid: ", valid)
+	}
 
 }
