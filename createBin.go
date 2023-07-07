@@ -33,11 +33,8 @@ func main() {
 	binary.LittleEndian.PutUint64(numOfTxs, uint64(len(block.Txids)))
 
 	fileBytes = append(fileBytes, numOfTxs...)
-	fmt.Println("length: ", fileBytes)
 	for x := len(branches) - 2; x >= 0; x-- {
-		fmt.Println("--------")
 		for y := 0; y < len(branches[x]); y++ {
-			fmt.Println(hex.EncodeToString(branches[x][y][:]))
 			fileBytes = append(fileBytes, branches[x][y][:]...)
 		}
 	}

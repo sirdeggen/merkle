@@ -1,4 +1,4 @@
-package models
+package hash
 
 import (
 	"encoding/hex"
@@ -9,12 +9,12 @@ import (
 
 type Hash [32]byte
 
-func (h *Hash) toStringReverse() string {
+func (h *Hash) StringReverse() string {
 	rev := helpers.Reverse(*h)
 	return hex.EncodeToString(rev[:])
 }
 
-func fromStringReverse(s string) Hash {
+func FromStringReverse(s string) Hash {
 	var h Hash
 	bytes, err := hex.DecodeString(s)
 	if err != nil {
@@ -25,11 +25,11 @@ func fromStringReverse(s string) Hash {
 	return rev
 }
 
-func (h *Hash) toString() string {
+func (h *Hash) String() string {
 	return hex.EncodeToString(h[:])
 }
 
-func fromString(s string) Hash {
+func FromString(s string) Hash {
 	var h Hash
 	bytes, err := hex.DecodeString(s)
 	if err != nil {
