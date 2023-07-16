@@ -15,11 +15,11 @@ func NewMerkleProofService() *merkleProofService {
 	}
 }
 
-func (m *merkleProofService) GetMerkleProof(txids string) (*models.MerkleProof, error) {
-	var proof models.MerkleProof
+func (m *merkleProofService) GetMerkleProof(txids string) (*MerkleProof, error) {
+	var proof MerkleProof
 	return &proof, nil
 }
 
-func (m *merkleProofService) StoreMerkleProof(txid string, proof *models.MerkleProof) error {
+func (m *merkleProofService) StoreMerkleProof(txid string, proof *MerkleProof) error {
 	return nil
 }

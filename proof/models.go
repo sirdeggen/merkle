@@ -2,8 +2,8 @@ package proof
 
 import (
 	"fmt"
+	"strconv"
 
-	"github.com/sirdeggen/merkle/block"
 	"github.com/sirdeggen/merkle/hash"
 )
 
@@ -25,9 +25,9 @@ type MerkleProof struct {
 	Path      []string `json:"path"`
 }
 
-func CreateMerklePathFromBranchesAndIndex(leaves [][]models.Hash, index uint64) (*models.MerklePathBinary, error) {
-	var path models.MerklePathBinary
-	path.Index = index
+func CreateMerklePathFromBranchesAndIndex(leaves [][]hash.Hash, index uint64) (*MerkleProof, error) {
+	var path MerkleProof
+	path.Index = string(index)
 	levels := uint64(len(leaves)) - 1
 	offset := uint64(0)
 	mask := uint64(1) << levels
@@ -39,7 +39,8 @@ func CreateMerklePathFromBranchesAndIndex(leaves [][]models.Hash, index uint64) 
 			subIdx += 1
 		}
 		if level < levels {
-			path.Path = append([]models.Hash{leaves[level][subIdx]}, path.Path...)
+			h := leaves[level][subIdx].StringReverse()
+			path.Path = append([]string{h}, path.Path...)
 		}
 		mask = mask >> 1
 		offset = offset << 1
@@ -47,39 +48,27 @@ func CreateMerklePathFromBranchesAndIndex(leaves [][]models.Hash, index uint64) 
 	return &path, nil
 }
 
-func CheckMerklePathLeadsToRoot(txid *hash.Hash, path *block.MerklePathBinary, root *hash.Hash) bool {
+func CheckMerklePathLeadsToRoot(txid *hash.Hash, path *MerkleProof, root *hash.Hash) bool {
 	// start with txid
 	workingHash := *txid
-	lsb := path.Index
+	lsb, err := strconv.ParseUint(path.Index, 10, 64)
+	if err != nil {
+		fmt.Println(err)
+		return false
+	}
 	// hash with each path branch
 	for _, leaf := range path.Path {
 		var digest []byte
+		leafBytes := hash.FromStringReverse(leaf)
 		// if the least significant bit is 1 then the working hash is on the right
 		if lsb&1 > 0 {
-			digest = append(leaf[:], workingHash[:]...)
+			digest = append(leafBytes[:], workingHash[:]...)
 		} else {
-			digest = append(workingHash[:], leaf[:]...)
+			digest = append(workingHash[:], leafBytes[:]...)
 		}
 		workingHash = hash.Sha256Sha256(digest)
 		lsb = lsb >> 1
 	}
 	// check result equality with root
 	return workingHash == *root
-}
-
-func CalculateBlockWideMerklePaths(block *block.BlockBinary) error {
-	branches, err := CalculateMerkleBranches(block)
-	if err != nil {
-		return err
-	}
-	pathmap := make(models.PathMap)
-	for idx, txid := range block.Txids {
-		path, err := CreateMerklePathFromBranchesAndIndex(branches, uint64(idx))
-		if err != nil {
-			fmt.Println(err)
-		}
-		pathmap[txid] = path
-	}
-	block.MerklePaths = &pathmap
-	return nil
 }

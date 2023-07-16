@@ -55,8 +55,8 @@ func NewMerkleTreeService(dir string) *merkleTreeService {
 }
 
 func (mpw *merkleTreeService) Write(branches MerkleTree) error {
-	root := branches[0][0].StringReverse()
-	l := branches[len(branches)-1]
+	root := branches[len(branches)-1][0].StringReverse()
+	l := branches[0]
 	numOfTxs := make([]byte, 8)
 	binary.LittleEndian.PutUint64(numOfTxs, uint64(len(l)))
 	fileBytes := numOfTxs
@@ -65,7 +65,8 @@ func (mpw *merkleTreeService) Write(branches MerkleTree) error {
 			fileBytes = append(fileBytes, branches[x][y][:]...)
 		}
 	}
-	err := ioutil.WriteFile(fmt.Sprint(mpw.Directory, '/', root), fileBytes, fs.FileMode(0644))
+	filename := mpw.Directory + "/" + root
+	err := ioutil.WriteFile(filename, fileBytes, fs.FileMode(0644))
 	return err
 }
 

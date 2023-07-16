@@ -18,7 +18,7 @@ func BlockBinaryFromJson(blockJson *BlockJson) (*BlockBinary, error) {
 	}, nil
 }
 
-func CalculateMerkleBranches(block *BlockBinary) ([][]hash.Hash, error) {
+func (block *BlockBinary) CalculateMerkleBranches() ([][]hash.Hash, error) {
 	numberofLevels := int(math.Ceil(math.Log2(float64(len(block.Txids)))))
 	// the branches are all 32 byte hashes
 	var branches [][]hash.Hash
