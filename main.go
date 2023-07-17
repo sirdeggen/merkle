@@ -49,7 +49,10 @@ func main() {
 	createTreeFileFromJsonFile("data/smallblock.json")
 	createTreeFileFromJsonFile("data/midblock.json")
 	createTreeFileFromJsonFile("data/block.json")
-	readExisting("0a3b8cb97063d49e1a1504f10c5c6e648ec8fc436f1ab0ee68dd457a305f0a8b", 1)    // small
-	readExisting("d66e56fb408763e36e8622eb56a8a1072ccc606476fe9e0765cca0dff95949b1", 12)   // med
-	readExisting("a623039e2030dfafd02af3948f8f8483aadbb7296e205ff95f78a52269be97f5", 1234) // big
+	createTreeFileFromJsonFile("data/hugeblock.json")
+
+	readExisting("0a3b8cb97063d49e1a1504f10c5c6e648ec8fc436f1ab0ee68dd457a305f0a8b", 1)     // small
+	readExisting("d66e56fb408763e36e8622eb56a8a1072ccc606476fe9e0765cca0dff95949b1", 12)    // med
+	readExisting("a623039e2030dfafd02af3948f8f8483aadbb7296e205ff95f78a52269be97f5", 1234)  // big
+	readExisting("4cb1de606d95d4b359a20f0e26e4227383b12ca759a9af8e6423f89cb33f850a", 23456) // huge
 }
